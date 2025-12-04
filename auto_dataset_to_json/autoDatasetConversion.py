@@ -73,26 +73,20 @@ def load_dataset_from_file(filepath):
         raise ValueError(f"Unknown file type for {filepath}")
 
 # ----- CONVERSIONE IN JSON -------
-def create_json_documents(df, output_folder="json_output"):
+def create_json_documents(df, wrapper, output_folder="json_output"):
     os.makedirs(output_folder, exist_ok=True)
 
     for i, row in df.iterrows():
-        doc = {
-            "polymer_name": row.get("Polymer"),
-            "smiles": row.get("SMILES"),
-            "bigsmiles": row.get("BigSMILES"),
-            "properties": {
-                "Tg": row.get("Tg (K) exp"),
-                "unit": "K",
-            },
-            "source_dataset": "Bicerano"
-        }
+        doc = wrapper.convert_row(row, i)
 
         out_path = os.path.join(output_folder, f"polymer_{i}.json")
         with open(out_path, "w") as f:
             json.dump(doc, f, indent=4)
 
     print(f"Generated {len(df)} JSON files in {output_folder}")
+
+
+from wrappers.biceranoTg_wrapper import BiceranoWrapper
 
 if __name__ == "__main__":
     url = "https://springernature.figshare.com/ndownloader/files/42507037"
@@ -101,4 +95,5 @@ if __name__ == "__main__":
     df = load_dataset_from_file(downloaded_file)
 
     print(df.head())
-    create_json_documents(df)
+    wrapper = BiceranoWrapper()
+    create_json_documents(df, wrapper)
