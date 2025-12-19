@@ -1,3 +1,6 @@
-/auto_dataset_to_json/extracted
-/auto_dataset_to_json/json_output
+/old_datasetToJson
+/datasetToJson/extracted
 *.zip
+*.env
+*__pycache__
+/.ipynb_checkpoints
