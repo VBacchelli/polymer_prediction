@@ -6,6 +6,7 @@ JSON_SCHEMA = {
     "properties": {
         "Tg": None,
         "density": None,
+        "Tc": None,
         "glass_cte": None,
         "rubber_cte": None
     },
