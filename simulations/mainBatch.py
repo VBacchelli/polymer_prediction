@@ -5,7 +5,7 @@ import pandas as pd
 
 from simulate import setup_biosushy, run_simulation
 
-
+# nei miei dataset non sempre c'è il nome del polimero, per cui in quel caso uso l'hash dello smiles
 def polymer_id_from_row(row):
     if hasattr(row, "polymer_name") and pd.notna(row.polymer_name):
         return str(row.polymer_name)
