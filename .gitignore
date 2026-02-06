@@ -5,7 +5,4 @@
 *__pycache__
 /.ipynb_checkpoints
 *.csv
-/simulationEnv/Lib
-/simulationEnv/Scripts
-simulationEnv/pyvenv.cfg
 /simulations/BIO-SUSHY-tutorials
