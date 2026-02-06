@@ -182,4 +182,7 @@ def run_simulation(
 
     analysis.analyze_trajectory(wm)
 
+    os.chdir(wm.base_dir)
+    os.chdir("..")
+
     return wm.get_path("results_path")
