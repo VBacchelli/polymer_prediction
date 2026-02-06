@@ -12,9 +12,10 @@ def main():
         analysis,
     ) = setup_biosushy()
 
-    os.makedirs("simulations_test", exist_ok=True)
-
     print("🚀 Running simulation...")
+
+    os.makedirs("simulation_results", exist_ok=True)
+    os.chdir("simulation_results")
 
     results_path=run_simulation(
         WorkflowManager,
