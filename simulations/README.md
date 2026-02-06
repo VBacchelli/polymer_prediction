@@ -3,7 +3,7 @@ This folder contains scripts to build and run simple molecular dynamics simulati
 The workflow follows the approach described in [BIO-SUSHY](https://github.com/daimoners/BIO-SUSHY-tutorials) (CNR Daimon team) for polymer construction,
 force-field generation, and simulation setup.
 
-These scripts are used to obtain chain-level conformational properties (e.g. radius of gyration, end-to-end distance), which are then collected and added to the dataset used to train the predictive model for polymer properties.
+These scripts are used to obtain chain-level properties (e.g. radius of gyration, end-to-end distance), which are then collected and added to the dataset used to train the predictive model for polymer properties.
 
 ## Environment
 
