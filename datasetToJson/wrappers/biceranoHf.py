@@ -2,7 +2,7 @@ from schema import JSON_SCHEMA
 from etl import convert_row
 
 class BiceranoHfWrapper:
-    SOURCE = "bicerano_polymers"
+    SOURCE = "biceranoPolymers"
 
     COLUMN_MAP = {
         "Poymer name": "polymer_name",

@@ -3,6 +3,18 @@ import zipfile
 import requests
 import pandas as pd
 import copy
+import re
+
+# ============================================================
+# UTILS
+# ============================================================
+def normalize_star(smiles: str) -> str:
+    smiles = re.sub(r"\(\s*\*\s*\)", "[*]", smiles)
+    smiles = smiles.replace("[Ce]", "[*]").replace("[Th]", "[*]")
+    smiles = re.sub(r"(?<!\[)\*(?!\])", "[*]", smiles)
+
+    return smiles
+
 
 # ============================================================
 # LOADERS
@@ -116,6 +128,10 @@ def convert_row(
             continue
 
         value = row[col]
+
+        # normalizza asterischi in smiles
+        if target == "smiles":
+            value = normalize_star(value)
 
         # salta NaN
         if pd.isna(value):

@@ -9,7 +9,7 @@ class BiceranoWrapper:
         "Tg (K) exp": ("properties", "Tg"),
     }
 
-    SOURCE = "BiceranoTg"
+    SOURCE = "biceranoTg"
 
     def convert_row(self, row):
         return convert_row(
