@@ -12,6 +12,16 @@ class ExtendedWrapper:
     SOURCE = "extendedPolymers"
 
     def convert_row(self, row):
+        row = dict(row)
+
+        # Conversione Tg da °C a K (se presente e non nullo)
+        tg_value = row.get("Tg")
+        if tg_value is not None:
+            try:
+                row["Tg"] = float(tg_value) + 273.15
+            except (ValueError, TypeError):
+                row["Tg"] = None  
+
         return convert_row(
             row=row,
             column_map=self.COLUMN_MAP,
