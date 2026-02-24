@@ -3,6 +3,7 @@ import sys
 import subprocess
 import importlib
 import tempfile
+import traceback
 
 
 def setup_biosushy(repo_name="BIO-SUSHY-tutorials"):
@@ -99,9 +100,14 @@ def run_simulation(
         ratio=stoichiometry,
     )
 
-
     wm.add_path("raw_pdb", raw_pdb)
     wm.update_state("build_status", {"raw_build": "success"})
+
+    import MDAnalysis as mda
+    u = mda.Universe(raw_pdb)
+    n_atoms = len(u.atoms)
+
+    wm.save_result("system_size_atoms", n_atoms, units="count")
 
     polymer_pdb = wm.get_path("raw_pdb")
     force_field_dir = os.path.join(wm.base_dir, "force_field")
@@ -123,10 +129,10 @@ def run_simulation(
 
             print(f"\n✅ Force Field Generated Successfully!")
             print(f"   📜 Topology: {os.path.basename(top_file)}")
-
     except Exception as e:
         wm.update_state("build_status", {"parameterization": "failed", "error": str(e)})
         print(f"\n❌ Error during parameterization: {e}")
+        traceback.print_exc()
 
     gro_path = wm.get_path("gro_file")
     top_path = wm.get_path("top_file")
@@ -177,7 +183,6 @@ def run_simulation(
         wm.update_state("simulation_status", {"status": "failed", "error": str(e)})
         print(f"\n❌ Error: {e}")
 
-    cwd = os.getcwd()
     os.chdir(md_dir)
 
     analysis.analyze_trajectory(wm)

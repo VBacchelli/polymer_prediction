@@ -2,17 +2,10 @@ import hashlib
 import json
 import os
 import pandas as pd
+import re
+import traceback
 
 from simulate import setup_biosushy, run_simulation
-
-# nei miei dataset non sempre c'è il nome del polimero, per cui in quel caso uso l'hash dello smiles
-def polymer_id_from_row(row):
-    if hasattr(row, "polymer_name") and pd.notna(row.polymer_name):
-        return str(row.polymer_name)
-
-    h = hashlib.sha1(row.smiles.encode("utf-8")).hexdigest()[:8]
-    return f"poly_{h}"
-
 
 def main():
     (
@@ -23,38 +16,27 @@ def main():
         analysis,
     ) = setup_biosushy()
 
-    df = pd.DataFrame([
-        {
-            "polymer_name": "polyethylene", # funzionante
-            "smiles": "[*]CC[*]",
-        },
-        {
-            "polymer_name": "polystyrene", # funzionante
-            "smiles": "[*]CC(c1ccccc1)[*]",
-        },
-        {
-            "polymer_name": "polyethylene terephthalate", #  Parameters have not been assigned to all angles
-            "smiles": "[*]OC(=O)c1ccc(cc1)C(=O)OCC[*]",
-        },
-        {
-            "polymer_name": "nylon 6", # Found no types for atom numbered 21 which is atomic number 6
-            "smiles": "[*]NCCCCCC(=O)[*]",
-        }, 
-        {
-            "polymer_name": "Poly(acrylic acid)", # Pre-condition Violation - bond already exists
-            "smiles": "*CC(*)C(=O)O",
-        }
-    ])
+    from pymongo import MongoClient
+    from dotenv import load_dotenv
 
-    os.makedirs("simulation_results", exist_ok=True)
-    os.chdir("simulation_results")
+    load_dotenv()
+    MONGO_URI = os.getenv("MONGO_URI")
+
+    client = MongoClient(MONGO_URI)
+    db=client["PolymerPrediction"]
+    collection=db["biceranoPolymers"]
+
+    docs = list(collection.find({}))
+    df = pd.DataFrame(docs)
+    os.makedirs("simulation_resultsHf", exist_ok=True)
+    os.chdir("simulation_resultsHf")
 
     results = []
 
-    for row in df.itertuples(index=False):
-        polymer_id = polymer_id_from_row(row)
+    for _, row in df.iterrows():
+        polymer_id = str(row._id) # mantengo l'id che ho sul dataset per poterli riallineare
         print(f"🚀 Running simulation for {polymer_id}")
-
+        smiles=row.smiles
         try:
             results_path = run_simulation(
                 WorkflowManager,
@@ -63,11 +45,11 @@ def main():
                 md_engine,
                 analysis,
                 polymer_name=polymer_id,
-                smiles=row.smiles,
-                n_monomers=8,
+                smiles=smiles,
+                n_monomers=3,
                 stoichiometry=0.3,
                 temperature=300,
-                steps=20000,
+                steps=40000,
                 timestep_ps=0.001,
             )
 
@@ -88,7 +70,7 @@ def main():
 
     results_df = pd.DataFrame(results)
     print(results_df)
-    results_df.to_csv("simulation_results.csv", index=False)
+    results_df.to_csv("results_biceranoHf.csv", index=False)
 
     print("✅ All simulations completed.")
 
