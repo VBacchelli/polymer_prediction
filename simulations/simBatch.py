@@ -46,7 +46,7 @@ def main():
                 analysis,
                 polymer_name=polymer_id,
                 smiles=smiles,
-                n_monomers=3,
+                n_monomers=8,
                 stoichiometry=0.3,
                 temperature=300,
                 steps=40000,
