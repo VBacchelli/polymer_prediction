@@ -3,7 +3,7 @@ import subprocess
 import mdtraj as md
 import numpy as np
 from pathlib import Path
-from bondsList import generate_backbone_cc_ndx
+from bondsList import generate_backbone_ndx_from_folder
 
 # ==============================
 # Config
@@ -152,7 +152,7 @@ def run_batch(root_dir: Path, dummy_mdp: Path):
 
         if md_dir.is_dir():
             try:
-                generate_backbone_cc_ndx(md_dir, output_ndx="bonds.ndx")
+                generate_backbone_ndx_from_folder(md_dir)
             except Exception as e:
                 print(f"Skipped {polymer_dir.name}: {e}")
 
@@ -177,19 +177,6 @@ def run_batch(root_dir: Path, dummy_mdp: Path):
     print(f"\nTotal processed: {len(successes) + len(failures)}")
     print(f"Success: {len(successes)}")
     print(f"Failed: {len(failures)}")
-
-    if successes:
-        print("\n--- SUCCESSFUL ---")
-        for name in successes:
-            print("  ✓", name)
-
-    if failures:
-        print("\n--- FAILED ---")
-        for name, err in failures.items():
-            print("  ✗", name)
-            print("     ", err)
-
-    print("\nDone.")
 
 
 if __name__ == "__main__":

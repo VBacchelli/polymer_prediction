@@ -1,88 +1,131 @@
+import os
+from pathlib import Path
+from bson import ObjectId
+from rdkit import Chem
 import MDAnalysis as mda
 import networkx as nx
-from pathlib import Path
+from dotenv import load_dotenv
+from pymongo import MongoClient
 
-def generate_backbone_cc_ndx(topology_file,
-                             output_ndx="bonds.ndx"):
-    """
-    Identify backbone on heavy-atom network (no H),
-    then write only C–C bonds belonging to that backbone in GROMACS .ndx format.
+# ------------------ Mongo ------------------
 
-    topology_file: path to a .pdb OR a directory containing a .pdb
-    """
+load_dotenv()
+_client = MongoClient(os.getenv("MONGO_URI"))
+_collection = _client["PolymerPrediction"]["biceranoPolymers"]
 
-    topology_file = Path(topology_file)
+def get_smiles(polymer_id):
+    doc = (_collection.find_one({"_id": polymer_id})
+           or _collection.find_one({"_id": ObjectId(polymer_id)}))
+    if not doc:
+        raise ValueError(f"No document found for ID {polymer_id}")
+    return doc["smiles"]
 
-    # allow passing a directory like .../<polymer_id>/MD/
-    if topology_file.is_dir():
-        pdbs = sorted(topology_file.glob("*.pdb"))
+# ------------------ SMILES ------------------
+
+def get_attachments(smiles):
+    mol = Chem.MolFromSmiles(smiles)
+    wc = [a for a in mol.GetAtoms() if a.GetAtomicNum() == 0]
+    if len(wc) != 2:
+        raise ValueError("Expected exactly two [*] in SMILES")
+
+    def heavy_deg(a):
+        return sum(n.GetAtomicNum() > 1 for n in a.GetNeighbors())
+
+    return [(n.GetSymbol(), heavy_deg(n)) for n in (w.GetNeighbors()[0] for w in wc)]
+
+# ------------------ PDB loader ------------------
+
+def load_universe(path):
+    path = Path(path)
+
+    # if folder → search pdb
+    if path.is_dir():
+        pdbs = sorted(path.glob("*.pdb"))
         if not pdbs:
-            raise ValueError(f"No .pdb found in {topology_file}")
+            raise ValueError(f"No .pdb found in {path}")
+        path = pdbs[0]
 
-        topology_file = pdbs[0]   # deterministic (usually polymer_vac_final.pdb)
-        output_ndx = topology_file.parent / output_ndx
+    u = mda.Universe(str(path))
 
-    # first load normally
-    u = mda.Universe(str(topology_file))
-
-    # if no bonds present → reload with guess_bonds=True
-    if len(u.bonds) == 0:
+    # if no bonds, guess
+    if not u.bonds:
         print("⚠ No bonds found — guessing bonds.")
-        u = mda.Universe(str(topology_file), guess_bonds=True)
+        u = mda.Universe(str(path), guess_bonds=True)
 
-    # build graph with heavy atoms (no H) 
+    return u, path
+
+# ------------------ Backbone ------------------
+
+def generate_backbone_ndx_from_folder(folder_path, verbose=True):
+
+    folder = Path(folder_path)
+
+    u, pdb_path = load_universe(folder)
+
+    smiles = get_smiles(folder.name)
+    attachments = get_attachments(smiles)
+
+    if verbose:
+        print("Attachment info:", attachments)
+        print("Using PDB:", pdb_path.name)
+
+    # heavy atom graph
     heavy = {a.index for a in u.atoms if a.element != "H"}
+    G = nx.Graph((b.atoms[0].index, b.atoms[1].index)
+                 for b in u.bonds
+                 if b.atoms[0].index in heavy and b.atoms[1].index in heavy)
 
-    G = nx.Graph()
-    for bond in u.bonds:
-        a1, a2 = bond.atoms
-        if a1.index in heavy and a2.index in heavy:
-            G.add_edge(a1.index, a2.index)
+    if not G.nodes:
+        raise ValueError("No heavy-atom bonds found.")
 
-    if len(G.nodes) == 0:
-        raise ValueError("No heavy-atom bonds found (check bonds/guess_bonds).")
+    deg1 = [n for n in G.nodes if G.degree(n) == 1]
 
-    # find largest connected component
-    largest = max(nx.connected_components(G), key=len)
-    subgraph = G.subgraph(largest).copy()
+    def candidates(elem, deg):
+        return [n for n in deg1
+                if u.atoms[n].element == elem and G.degree(n) == deg]
 
-    # try to find real endpoints (degree 1 nodes)
-    endpoints = [n for n in subgraph.nodes if subgraph.degree[n] == 1]
+    start_set = candidates(*attachments[0])
+    end_set   = candidates(*attachments[1])
 
-    if len(endpoints) == 2:
-        backbone = nx.shortest_path(subgraph, endpoints[0], endpoints[1])
-    else:
-        # fallback to double BFS
-        start = next(iter(subgraph.nodes))
-        dist1 = nx.single_source_shortest_path_length(subgraph, start)
-        far = max(dist1, key=dist1.get)
+    if not start_set or not end_set:
+        raise ValueError("Could not match attachment atoms in PDB")
 
-        dist2 = nx.single_source_shortest_path_length(subgraph, far)
-        opp = max(dist2, key=dist2.get)
+    best = max(
+        ((i, j, nx.shortest_path_length(G, i, j))
+         for i in start_set for j in end_set
+         if nx.has_path(G, i, j)),
+        key=lambda x: x[2],
+        default=None
+    )
 
-        backbone = nx.shortest_path(subgraph, far, opp)
+    if not best:
+        raise ValueError("No valid backbone endpoints found.")
 
-    backbone_set = set(backbone)
+    backbone = nx.shortest_path(G, best[0], best[1])
+    if len(backbone) < 3:
+        raise ValueError("Backbone too short.")
 
-    # extract C–C bonds that lie on the backbone (for autocorrelation of C-C bonds only)
-    cc_pairs = []
-    for bond in u.bonds:
-        a1, a2 = bond.atoms
-        if a1.index in backbone_set and a2.index in backbone_set:
-            if a1.element == "C" and a2.element == "C":
-                cc_pairs.append((a1.index + 1, a2.index + 1))  # GROMACS is 1-based
+    cc_bonds = [(u.atoms[i].index + 1, u.atoms[j].index + 1)
+                for i, j in zip(backbone[:-1], backbone[1:])
+                if u.atoms[i].element == "C" and u.atoms[j].element == "C"]
 
-    if not cc_pairs:
-        raise ValueError("No C–C backbone bonds found.")
-
-    # write ndx
-    with open(output_ndx, "w") as f:
+    ndx_path = folder / "bonds.ndx"
+    with open(ndx_path, "w") as f:
         f.write("[ bonds ]\n")
-        for i, j in cc_pairs:
-            f.write(f"{i} {j}\n")
+        for i, j in cc_bonds:
+            f.write(f"{i:6d} {j:6d}\n")
 
-    print(f"Backbone atoms: {len(backbone)}")
-    print(f"C–C bonds written: {len(cc_pairs)}")
-    print(f"File written: {output_ndx}")
+    if verbose:
+        print(f"Written {len(cc_bonds)} C–C bonds → {ndx_path.name}")
 
-    return str(output_ndx)
+    return ndx_path
+
+# ------------------ CLI ------------------
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) != 2:
+        print("Usage: python script.py <polymer_folder_or_MD_folder>")
+        sys.exit(1)
+
+    generate_backbone_ndx_from_folder(sys.argv[1])
