@@ -150,13 +150,9 @@ def run_batch(root_dir: Path, dummy_mdp: Path):
         md_dir = polymer_dir / "MD"
         ff_dir = polymer_dir / "force_field"
 
-        if md_dir.is_dir():
-            try:
-                generate_backbone_ndx_from_folder(md_dir)
-            except Exception as e:
-                print(f"Skipped {polymer_dir.name}: {e}")
-
         if md_dir.exists() and ff_dir.exists():
+            print("Generating backbone for:", polymer_dir.name)
+            generate_backbone_ndx_from_folder(polymer_dir)
             try:
                 run_rotacf(polymer_dir, dummy_mdp)
                 successes.append(polymer_dir.name)

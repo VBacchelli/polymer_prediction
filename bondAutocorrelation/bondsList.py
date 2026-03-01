@@ -7,7 +7,9 @@ import networkx as nx
 from dotenv import load_dotenv
 from pymongo import MongoClient
 
-# ------------------ Mongo ------------------
+# ==========================================================
+# Mongo
+# ==========================================================
 
 load_dotenv()
 _client = MongoClient(os.getenv("MONGO_URI"))
@@ -20,25 +22,33 @@ def get_smiles(polymer_id):
         raise ValueError(f"No document found for ID {polymer_id}")
     return doc["smiles"]
 
-# ------------------ SMILES ------------------
+# ==========================================================
+# SMILES → monomer backbone sequence
+# ==========================================================
 
-def get_attachments(smiles):
+def get_monomer_backbone_sequence(smiles):
     mol = Chem.MolFromSmiles(smiles)
     wc = [a for a in mol.GetAtoms() if a.GetAtomicNum() == 0]
+
     if len(wc) != 2:
         raise ValueError("Expected exactly two [*] in SMILES")
 
-    def heavy_deg(a):
-        return sum(n.GetAtomicNum() > 1 for n in a.GetNeighbors())
+    a1 = wc[0].GetNeighbors()[0]
+    a2 = wc[1].GetNeighbors()[0]
 
-    return [(n.GetSymbol(), heavy_deg(n)) for n in (w.GetNeighbors()[0] for w in wc)]
+    path = Chem.rdmolops.GetShortestPath(mol, a1.GetIdx(), a2.GetIdx())
 
-# ------------------ PDB loader ------------------
+    sequence = [mol.GetAtomWithIdx(i).GetSymbol() for i in path]
+
+    return sequence
+
+# ==========================================================
+# PDB loader
+# ==========================================================
 
 def load_universe(path):
     path = Path(path)
 
-    # if folder → search pdb
     if path.is_dir():
         pdbs = sorted(path.glob("*.pdb"))
         if not pdbs:
@@ -47,85 +57,135 @@ def load_universe(path):
 
     u = mda.Universe(str(path))
 
-    # if no bonds, guess
     if not u.bonds:
         print("⚠ No bonds found — guessing bonds.")
         u = mda.Universe(str(path), guess_bonds=True)
 
     return u, path
 
-# ------------------ Backbone ------------------
+# ==========================================================
+# Heavy graph
+# ==========================================================
 
-def generate_backbone_ndx_from_folder(folder_path, verbose=True):
-
-    folder = Path(folder_path)
-
-    u, pdb_path = load_universe(folder)
-
-    smiles = get_smiles(folder.name)
-    attachments = get_attachments(smiles)
-
-    if verbose:
-        print("Attachment info:", attachments)
-        print("Using PDB:", pdb_path.name)
-
-    # heavy atom graph
+def build_heavy_graph(u):
     heavy = {a.index for a in u.atoms if a.element != "H"}
-    G = nx.Graph((b.atoms[0].index, b.atoms[1].index)
-                 for b in u.bonds
-                 if b.atoms[0].index in heavy and b.atoms[1].index in heavy)
+
+    G = nx.Graph(
+        (b.atoms[0].index, b.atoms[1].index)
+        for b in u.bonds
+        if b.atoms[0].index in heavy and b.atoms[1].index in heavy
+    )
 
     if not G.nodes:
         raise ValueError("No heavy-atom bonds found.")
 
-    deg1 = [n for n in G.nodes if G.degree(n) == 1]
+    return G
 
-    def candidates(elem, deg):
-        return [n for n in deg1
-                if u.atoms[n].element == elem and G.degree(n) == deg]
+# ==========================================================
+# Sequence check
+# ==========================================================
 
-    start_set = candidates(*attachments[0])
-    end_set   = candidates(*attachments[1])
+def sequence_matches(polymer_sequence, monomer_sequence):
+    L = len(monomer_sequence)
 
-    if not start_set or not end_set:
-        raise ValueError("Could not match attachment atoms in PDB")
+    if len(polymer_sequence) % L != 0:
+        return False
 
-    best = max(
-        ((i, j, nx.shortest_path_length(G, i, j))
-         for i in start_set for j in end_set
-         if nx.has_path(G, i, j)),
-        key=lambda x: x[2],
-        default=None
-    )
+    for i in range(0, len(polymer_sequence), L):
+        if polymer_sequence[i:i+L] != monomer_sequence:
+            return False
 
-    if not best:
-        raise ValueError("No valid backbone endpoints found.")
+    return True
 
-    backbone = nx.shortest_path(G, best[0], best[1])
-    if len(backbone) < 3:
+# ==========================================================
+# Backbone extraction with strict periodicity check
+# ==========================================================
+
+def extract_backbone(G, u, monomer_sequence):
+
+    elem_A = monomer_sequence[0]
+    elem_C = monomer_sequence[-1]
+
+    A_nodes = [n for n in G.nodes if u.atoms[n].element == elem_A]
+    C_nodes = [n for n in G.nodes if u.atoms[n].element == elem_C]
+
+    best_path = None
+    max_len = -1
+
+    for i in A_nodes:
+        for j in C_nodes:
+            if nx.has_path(G, i, j):
+                path = nx.shortest_path(G, i, j)
+
+                seq = [u.atoms[n].element for n in path]
+
+                if sequence_matches(seq, monomer_sequence):
+                    if len(path) > max_len:
+                        max_len = len(path)
+                        best_path = path
+
+    if best_path is None:
+        raise ValueError("No backbone satisfying full monomer periodicity found.")
+
+    return best_path
+
+# ==========================================================
+# Main
+# ==========================================================
+
+def generate_backbone_ndx_from_folder(folder_path, verbose=True):
+
+    folder = Path(folder_path)
+    md_folder = folder / "MD"
+
+    if not md_folder.exists():
+        raise FileNotFoundError(f"Missing MD folder: {md_folder}")
+
+    u, pdb_path = load_universe(md_folder)
+
+    smiles = get_smiles(folder.name)
+    monomer_sequence = get_monomer_backbone_sequence(smiles)
+
+    if verbose:
+        print("Using PDB:", pdb_path.name)
+        print("Monomer backbone sequence:", monomer_sequence)
+
+    G = build_heavy_graph(u)
+
+    backbone = extract_backbone(G, u, monomer_sequence)
+
+    if len(backbone) < len(monomer_sequence):
         raise ValueError("Backbone too short.")
 
-    cc_bonds = [(u.atoms[i].index + 1, u.atoms[j].index + 1)
-                for i, j in zip(backbone[:-1], backbone[1:])
-                if u.atoms[i].element == "C" and u.atoms[j].element == "C"]
+    cc_bonds = [
+        (u.atoms[i].index + 1, u.atoms[j].index + 1)
+        for i, j in zip(backbone[:-1], backbone[1:])
+        if u.atoms[i].element == "C" and u.atoms[j].element == "C"
+    ]
 
-    ndx_path = folder / "bonds.ndx"
+    ndx_path = md_folder / "bonds.ndx"
+
     with open(ndx_path, "w") as f:
         f.write("[ bonds ]\n")
         for i, j in cc_bonds:
             f.write(f"{i:6d} {j:6d}\n")
 
     if verbose:
-        print(f"Written {len(cc_bonds)} C–C bonds → {ndx_path.name}")
+        print(f"Backbone atoms: {len(backbone)}")
+        print(f"C–C bonds written: {len(cc_bonds)}")
+        print(f"Saved → {ndx_path}")
 
     return ndx_path
 
-# ------------------ CLI ------------------
+# ==========================================================
+# CLI
+# ==========================================================
 
 if __name__ == "__main__":
     import sys
+
     if len(sys.argv) != 2:
-        print("Usage: python script.py <polymer_folder_or_MD_folder>")
+        print("Usage: python script.py <polymer_folder>")
         sys.exit(1)
 
     generate_backbone_ndx_from_folder(sys.argv[1])
