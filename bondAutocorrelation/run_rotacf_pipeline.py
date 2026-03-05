@@ -4,6 +4,8 @@ import mdtraj as md
 import numpy as np
 from pathlib import Path
 from bondsList import generate_backbone_ndx_from_folder
+import json
+import csv
 
 # ==============================
 # Config
@@ -20,11 +22,21 @@ default_dummy_mdp = script_path / "dummy.mdp"
 # ==============================
 
 def run_cmd(cmd, cwd=None):
-    """
-    Run a command and raise an error if it fails.
-    """
     print("Running:", " ".join(str(c) for c in cmd))
-    subprocess.run(cmd, check=True, cwd=cwd)
+
+    result = subprocess.run(
+        cmd,
+        cwd=cwd,
+        capture_output=True,
+        text=True
+    )
+
+    if result.returncode != 0:
+        print(result.stdout)
+        print(result.stderr)
+        raise RuntimeError("Command failed")
+
+    return result.stdout
 
 
 # ==============================
@@ -117,18 +129,43 @@ def run_rotacf(polymer_dir: Path, dummy_mdp: Path):
     generate_tpr(ff_dir, dummy_mdp)
     convert_dcd_to_xtc(md_dir)
 
-    run_cmd([
+    output = run_cmd([
         "gmx", "rotacf",
-        "-d",  # IMPORTANT: treat index as bond vectors (pairs), not atom triplets
+        "-d",
         "-s", str(ff_dir / "topol_box.tpr"),
         "-f", str(md_dir / "traj.xtc"),
         "-n", str(bonds_ndx),
-        "-o", str(md_dir / "rotacf.xvg")
+        "-o", str(md_dir / "rotacf.xvg"),
+        "-fitfn", "exp",
+        "-beginfit", "0",
+        "-endfit", "100",
+        "-P", "2"
     ])
+    tau = None
+
+    """ for line in output.splitlines():
+        print(line)
+        if "tau" in line:
+            tau = float(line.split("=")[1].strip().split()[0])
+            break """
+    line=output.splitlines()[-1]
+    if not line:
+        raise Exception("Invalid line")
+    
+    count = 0
+    tau = None
+    for l in line.split()[1:]:
+        tau = float(l)
+        if tau is None:
+            raise Exception("Error: tau is none. Skipping ", polymer_dir.name)
+        count+=1
+    if count != 5:
+        raise Exception("Substring aren't 5")
 
     print("Finished:", polymer_dir.name)
+    print("Tau:",tau)
     print("-" * 60)
-
+    return tau
 
 # ==============================
 # Batch logic
@@ -143,6 +180,8 @@ def run_batch(root_dir: Path, dummy_mdp: Path):
     successes = []
     failures = {}
 
+    results=[]
+
     for polymer_dir in root_dir.iterdir():
         if not polymer_dir.is_dir():
             continue
@@ -154,13 +193,19 @@ def run_batch(root_dir: Path, dummy_mdp: Path):
             print("Generating backbone for:", polymer_dir.name)
             generate_backbone_ndx_from_folder(polymer_dir)
             try:
-                run_rotacf(polymer_dir, dummy_mdp)
+                tau=run_rotacf(polymer_dir, dummy_mdp)
+                results.append((polymer_dir.name, tau))
                 successes.append(polymer_dir.name)
             except Exception as e:
                 failures[polymer_dir.name] = str(e)
                 print("Error in:", polymer_dir.name)
                 print(e)
                 print("=" * 60)
+
+    with open(ROOT_DIR / "rotacf_results.csv", "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["polymer_id", "tau"])
+        writer.writerows(results)
 
     # ==============================
     # Final execution summary
