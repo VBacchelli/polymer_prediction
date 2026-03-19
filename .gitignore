@@ -7,3 +7,5 @@
 *.csv
 /simulations/BIO-SUSHY-tutorials
 /GNNs/pyg_polymer_dataset
+/GNNs/results_dmppn_cv
+*.log
