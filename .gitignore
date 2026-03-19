@@ -3,6 +3,7 @@
 *.zip
 *.env
 *__pycache__
-/.ipynb_checkpoints
+.ipynb_checkpoints
 *.csv
 /simulations/BIO-SUSHY-tutorials
+/GNNs/pyg_polymer_dataset
