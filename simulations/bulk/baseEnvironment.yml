@@ -1,0 +1,18 @@
+name: sim
+channels:
+  - conda-forge
+  - nvidia
+  - bioconda
+  - nodefaults 
+
+dependencies:
+  - python=3.10
+  - mdanalysis
+  - mdtraj
+  - rdkit
+  - openmm
+  - parmed
+  - numpy
+  - scipy
+  - pandas
+  - matplotlib

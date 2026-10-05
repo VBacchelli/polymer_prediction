@@ -1,0 +1,14 @@
+; dummy.mdp 
+; Minimal MDP used only to generate a .tpr for analysis (rotacf).
+; No dynamics is run (nsteps = 0).
+integrator      = md
+nsteps          = 0
+
+cutoff-scheme   = Verlet
+pbc             = xyz
+
+coulombtype     = Cut-off
+vdwtype         = Cut-off
+
+constraints     = none
+
