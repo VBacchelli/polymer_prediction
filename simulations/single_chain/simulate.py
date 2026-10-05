@@ -13,14 +13,16 @@ def setup_biosushy(repo_name="BIO-SUSHY-tutorials"):
 
     repo_url = "https://github.com/daimoners/BIO-SUSHY-tutorials.git"
 
-    if os.path.exists(repo_name):
+    repo_path = os.path.join(os.path.dirname(__file__), repo_name)
+
+    if os.path.exists(repo_path):
         print(f"🔄 Updating {repo_name}...")
-        subprocess.run(["git", "-C", repo_name, "pull"], check=False)
+        subprocess.run(["git", "-C", repo_path, "pull"], check=False)
     else:
         print(f"⬇️ Cloning {repo_name}...")
-        subprocess.run(["git", "clone", repo_url], check=True)
+        subprocess.run(["git", "clone", repo_url, repo_path], check=True)
 
-    repo_path = os.path.abspath(repo_name)
+    repo_path = os.path.abspath(repo_path)
     if repo_path not in sys.path:
         sys.path.insert(0, repo_path)
 
@@ -183,11 +185,11 @@ def run_simulation(
         wm.update_state("simulation_status", {"status": "failed", "error": str(e)})
         print(f"\n❌ Error: {e}")
 
-    os.chdir(md_dir)
-
-    analysis.analyze_trajectory(wm)
-
-    os.chdir(wm.base_dir)
-    os.chdir("..")
+    original_dir = os.getcwd()
+    try:
+        os.chdir(md_dir)
+        analysis.analyze_trajectory(wm)
+    finally:
+        os.chdir(original_dir)
 
     return wm.get_path("results_path")
