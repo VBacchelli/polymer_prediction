@@ -12,10 +12,10 @@ polymer chains. The scripts are based on
   BIO-SUSHY and running one single-chain simulation. It builds the polymer,
   generates the force field, runs the vacuum MD simulation, and stores the
   workflow state and results.
-- [`main.py`](./main.py): example entrypoint for one polyethylene simulation.
+- [`run_single.py`](./run_single.py): example entrypoint for one polyethylene simulation.
   It uses a fixed SMILES, chain length, temperature, and number of steps, then
   prints the mean radius of gyration.
-- [`simBatch.py`](./simBatch.py): batch entrypoint that reads polymers from the
+- [`run_batch.py`](./run_batch.py): batch entrypoint that reads polymers from the
   MongoDB `biceranoPolymers` collection and runs the same workflow for each
   polymer.
 - [`environment.yml`](./environment.yml): Conda environment used for the
@@ -55,12 +55,11 @@ conda activate simulation
 Run the example from this directory:
 
 ```bash
-python main.py
+python run_single.py
 ```
 
 Run the MongoDB batch workflow from this directory:
 
 ```bash
-python simBatch.py
+python run_batch.py
 ```
-
