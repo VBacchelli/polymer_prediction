@@ -63,16 +63,15 @@ workflow:
 - [`dummy.mdp`](./single_polymer/dummy.mdp): minimal GROMACS input used by the
   analysis workflow.
 
-### `testConvergence/`
+### `test_convergence/`
 
 Scripts for checking the convergence of bulk features over time:
 
-- [`extract_rg_timeseries.py`](./testConvergence/extract_rg_timeseries.py):
+- [`extract_rg_timeseries.py`](./test_convergence/extract_rg_timeseries.py):
   extracts radius-of-gyration time series with GROMACS.
-- [`extract_density_timeseries.py`](./testConvergence/extract_density_timeseries.py):
+- [`extract_density_timeseries.py`](./test_convergence/extract_density_timeseries.py):
   extracts density time series with GROMACS.
-- [`rg_ts.sbatch`](./testConvergence/rg_ts.sbatch): SLURM job template for
+- [`rg_ts.sbatch`](./test_convergence/rg_ts.sbatch): SLURM job template for
   radius-of-gyration time series.
-- [`density_ts.sbatch`](./testConvergence/density_ts.sbatch): SLURM job
+- [`density_ts.sbatch`](./test_convergence/density_ts.sbatch): SLURM job
   template for density time series.
-
