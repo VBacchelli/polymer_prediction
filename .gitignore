@@ -4,8 +4,18 @@
 *.env
 *__pycache__
 .ipynb_checkpoints
-*.csv
-/simulations/BIO-SUSHY-tutorials
+/simulations/single_chain/BIO-SUSHY-tutorials
 /GNNs/pyg_polymer_dataset
 /GNNs/results_dmppn_cv
 *.log
+
+# Eccezione per dataset di input con le feature md
+!/data/md_features/
+
+/runs
+/results
+/data/embeddings
+/data/gnn_cache
+/data/processed
+# Input temporaneo creato per la predizione Chemprop sul test set
+/data/biceranoPolymers_chemprop_test.csv
